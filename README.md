@@ -1,6 +1,6 @@
 # PPP-TURMA2
 
-## Guia completo da API
+## Guia completo da API - 🧠 EduQuiz — Plataforma Educacional Interativa
 
 - Base URL: `/api`
 - Swagger UI: `http://localhost:3000/docs`

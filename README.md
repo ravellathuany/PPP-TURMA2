@@ -1,6 +1,6 @@
 # PPP-TURMA2
 
-## Guia completo da API (resumo do Swagger)
+## Guia completo da API
 
 - Base URL: `/api`
 - Swagger UI: `http://localhost:3000/docs`

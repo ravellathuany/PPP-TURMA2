@@ -1,0 +1,442 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "EduQuiz API",
+    "version": "1.0.0",
+    "description": "API Rest para o sistema educacional EduQuiz, com autenticação JWT, controle de acesso (aluno/professor) e armazenamento em memória."
+  },
+  "servers": [
+    { "url": "/api", "description": "Base path" }
+  ],
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    },
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "properties": { "error": { "type": "string" } },
+        "example": { "error": "Mensagem de erro" }
+      },
+      "User": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer" },
+          "name": { "type": "string" },
+          "email": { "type": "string" },
+          "role": { "type": "string", "enum": ["student", "teacher"] }
+        }
+      },
+      "RegisterRequest": {
+        "type": "object",
+        "required": ["name", "email", "password"],
+        "properties": {
+          "name": { "type": "string" },
+          "email": { "type": "string" },
+          "password": { "type": "string" },
+          "role": { "type": "string", "enum": ["student", "teacher"], "default": "student" }
+        }
+      },
+      "AuthResponse": {
+        "type": "object",
+        "properties": {
+          "user": { "$ref": "#/components/schemas/User" },
+          "token": { "type": "string" }
+        }
+      },
+      "LoginRequest": {
+        "type": "object",
+        "required": ["email", "password"],
+        "properties": {
+          "email": { "type": "string" },
+          "password": { "type": "string" }
+        }
+      },
+      "Subject": {
+        "type": "object",
+        "properties": { "id": { "type": "integer" }, "name": { "type": "string" } }
+      },
+      "AddSubjectRequest": {
+        "type": "object",
+        "required": ["name"],
+        "properties": { "name": { "type": "string" } }
+      },
+      "Question": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer" },
+          "subjectId": { "type": "integer" },
+          "text": { "type": "string" },
+          "options": { "type": "array", "items": { "type": "string" }, "minItems": 5, "maxItems": 5 },
+          "answerIndex": { "type": "integer" },
+          "imageUrl": { "type": ["string", "null"], "description": "URL pública da imagem da questão, quando houver" }
+        }
+      },
+      "QuestionPublic": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer" },
+          "subjectId": { "type": "integer" },
+          "text": { "type": "string" },
+          "options": { "type": "array", "items": { "type": "string" }, "minItems": 5, "maxItems": 5 },
+          "imageUrl": { "type": ["string", "null"], "description": "URL pública da imagem da questão, quando houver" }
+        }
+      },
+      "AddQuestionRequest": {
+        "type": "object",
+        "required": ["subjectId", "text", "options", "answerIndex"],
+        "properties": {
+          "subjectId": { "type": "integer" },
+          "text": { "type": "string" },
+          "options": { "type": "array", "items": { "type": "string" }, "minItems": 5, "maxItems": 5, "description": "Exatamente 5 alternativas, todas obrigatórias" },
+          "answerIndex": { "type": "integer", "minimum": 0, "maximum": 4, "description": "Índice da alternativa correta (0 a 4)" },
+          "imageUrl": { "type": "string", "nullable": true, "description": "Opcional: URL já hospedada para a imagem" }
+        }
+      },
+      "CreateQuizRequest": {
+        "type": "object",
+        "required": ["subjectIds"],
+        "properties": {
+          "subjectIds": { "type": "array", "items": { "type": "integer" }, "minItems": 1, "maxItems": 4 }
+        }
+      },
+      "CreateQuizResponse": {
+        "type": "object",
+        "properties": {
+          "quizId": { "type": "integer" },
+          "subjects": { "type": "array", "items": { "type": "integer" } },
+          "questions": { "type": "array", "items": { "$ref": "#/components/schemas/QuestionPublic" } }
+        }
+      },
+      "FinalizeQuizRequest": {
+        "type": "object",
+        "required": ["answers"],
+        "properties": {
+          "answers": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["questionId", "selectedIndex"],
+              "properties": {
+                "questionId": { "type": "integer" },
+                "selectedIndex": { "type": "integer" }
+              }
+            }
+          }
+        }
+      },
+      "FinalizeQuizResponse": {
+        "type": "object",
+        "properties": {
+          "quizId": { "type": "integer" },
+          "total": { "type": "integer" },
+          "correct": { "type": "integer" },
+          "incorrect": { "type": "integer" },
+          "bySubject": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "object",
+              "properties": {
+                "total": { "type": "integer" },
+                "correct": { "type": "integer" },
+                "incorrect": { "type": "integer" }
+              }
+            }
+          },
+          "correctQuestionIds": { "type": "array", "items": { "type": "integer" } },
+          "incorrectQuestionIds": { "type": "array", "items": { "type": "integer" } },
+          "details": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "questionId": { "type": "integer" },
+                "subjectId": { "type": "integer" },
+                "selectedIndex": { "type": ["integer", "null"] },
+                "correctIndex": { "type": "integer" },
+                "correct": { "type": "boolean" }
+              }
+            }
+          }
+        }
+      },
+      "QuizHistoryResponse": {
+        "type": "object",
+        "properties": {
+          "totalFinished": { "type": "integer" },
+          "quizzes": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": { "type": "integer" },
+                "subjectIds": { "type": "array", "items": { "type": "integer" } },
+                "createdAt": { "type": "string" },
+                "finalizedAt": { "type": "string" },
+                "results": { "$ref": "#/components/schemas/FinalizeQuizResponse" }
+              }
+            }
+          }
+        }
+      },
+      "StatsPerSubjectItem": {
+        "type": "object",
+        "properties": {
+          "subjectId": { "type": "integer" },
+          "subjectName": { "type": "string" },
+          "totalQuestions": { "type": "integer" },
+          "answeredByStudent": { "type": "integer" }
+        }
+      },
+      "StatsOverall": {
+        "type": "object",
+        "properties": {
+          "totalQuestions": { "type": "integer" },
+          "answeredByStudent": { "type": "integer" }
+        }
+      }
+    }
+  },
+  "tags": [
+    { "name": "Auth" },
+    { "name": "Users" },
+    { "name": "Subjects" },
+    { "name": "Questions" },
+    { "name": "Quizzes" }
+  ],
+  "paths": {
+    "/auth/register": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Registrar usuário (aluno ou professor)",
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/RegisterRequest" } } }
+        },
+        "responses": {
+          "201": { "description": "Criado", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AuthResponse" } } } },
+          "409": { "description": "Email já cadastrado", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
+          "400": { "description": "Requisição inválida", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
+          "500": { "description": "Erro interno", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+        }
+      }
+    },
+    "/auth/login": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Login",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/LoginRequest" } } } },
+        "responses": {
+          "200": { "description": "OK", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AuthResponse" } } } },
+          "401": { "description": "Credenciais inválidas", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
+          "400": { "description": "Requisição inválida", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+        }
+      }
+    },
+    "/users/students": {
+      "get": {
+        "tags": ["Users"],
+        "summary": "Listar alunos (professores somente)",
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": { "description": "OK", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/User" } } } } },
+          "401": { "description": "Não autenticado", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
+          "403": { "description": "Sem permissão", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+        }
+      }
+    },
+    "/subjects": {
+      "get": {
+        "tags": ["Subjects"],
+        "summary": "Listar matérias",
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": { "description": "OK", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/Subject" } } } } },
+          "401": { "description": "Não autenticado", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+        }
+      },
+      "post": {
+        "tags": ["Subjects"],
+        "summary": "Adicionar matéria (professores)",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AddSubjectRequest" } } } },
+        "responses": {
+          "201": { "description": "Criado", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Subject" } } } },
+          "409": { "description": "Matéria duplicada", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
+          "401": { "description": "Não autenticado", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
+          "403": { "description": "Sem permissão", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+        }
+      }
+    },
+    "/subjects/{id}": {
+      "delete": {
+        "tags": ["Subjects"],
+        "summary": "Remover matéria (professores)",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [ { "in": "path", "name": "id", "required": true, "schema": { "type": "integer" } } ],
+        "responses": {
+          "204": { "description": "Removido" },
+          "404": { "description": "Não encontrado", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
+          "401": { "description": "Não autenticado", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
+          "403": { "description": "Sem permissão", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+        }
+      }
+    },
+    "/questions": {
+      "get": {
+        "tags": ["Questions"],
+        "summary": "Listar questões (opcional filtrar por subjectId)",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [ { "in": "query", "name": "subjectId", "schema": { "type": "integer" } } ],
+        "responses": {
+          "200": { "description": "OK", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/Question" } } } } },
+          "401": { "description": "Não autenticado", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+        }
+      },
+      "post": {
+        "tags": ["Questions"],
+        "summary": "Adicionar questão (professores)",
+        "description": "Cria a questão com exatamente 5 alternativas. A imagem é opcional e só pode ser enviada no momento da criação.",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": { "schema": { "$ref": "#/components/schemas/AddQuestionRequest" } },
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "subjectId": { "type": "integer" },
+                  "text": { "type": "string" },
+                  "options": { "type": "array", "items": { "type": "string" }, "minItems": 5, "maxItems": 5 },
+                  "answerIndex": { "type": "integer", "minimum": 0, "maximum": 4 },
+                  "image": { "type": "string", "format": "binary" }
+                },
+                "required": ["subjectId", "text", "options", "answerIndex"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Criado", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Question" } } } },
+          "400": { "description": "Requisição inválida (matéria inexistente ou campos inválidos)", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
+          "401": { "description": "Não autenticado", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
+          "403": { "description": "Sem permissão", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+        }
+      }
+    },
+    "/questions/{id}": {
+      "get": {
+        "tags": ["Questions"],
+        "summary": "Obter questão por ID",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [ { "in": "path", "name": "id", "required": true, "schema": { "type": "integer" } } ],
+        "responses": {
+          "200": { "description": "OK", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Question" } } } },
+          "404": { "description": "Não encontrado", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
+          "401": { "description": "Não autenticado", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+        }
+      },
+      "delete": {
+        "tags": ["Questions"],
+        "summary": "Remover questão (professores)",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [ { "in": "path", "name": "id", "required": true, "schema": { "type": "integer" } } ],
+        "responses": {
+          "204": { "description": "Removido" },
+          "404": { "description": "Não encontrado", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
+          "401": { "description": "Não autenticado", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
+          "403": { "description": "Sem permissão", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+        }
+      }
+    },
+    "/quizzes": {
+      "post": {
+        "tags": ["Quizzes"],
+        "summary": "Criar quiz (1-4 matérias, 3 questões por matéria)",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CreateQuizRequest" } } } },
+        "responses": {
+          "201": { "description": "Criado", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CreateQuizResponse" } } } },
+          "400": { "description": "Regras não atendidas (sem matérias, menos de 3 questões, etc)", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
+          "401": { "description": "Não autenticado", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+        }
+      }
+    },
+    "/quizzes/{id}/finalize": {
+      "post": {
+        "tags": ["Quizzes"],
+        "summary": "Finalizar quiz e obter resultados",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [ { "in": "path", "name": "id", "required": true, "schema": { "type": "integer" } } ],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/FinalizeQuizRequest" } } } },
+        "responses": {
+          "200": { "description": "OK", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/FinalizeQuizResponse" } } } },
+          "404": { "description": "Quiz não encontrado", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
+          "403": { "description": "Sem permissão (não é dono)", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
+          "400": { "description": "Requisição inválida", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+        }
+      }
+    },
+    "/quizzes/me": {
+      "get": {
+        "tags": ["Quizzes"],
+        "summary": "Histórico de quizzes finalizados do aluno",
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": { "description": "OK", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/QuizHistoryResponse" } } } },
+          "401": { "description": "Não autenticado", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+        }
+      }
+    },
+    "/quizzes/me/stats/subjects": {
+      "get": {
+        "tags": ["Quizzes"],
+        "summary": "Relação total vs respondidas por matéria (questões únicas)",
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": { "description": "OK", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/StatsPerSubjectItem" } } } } },
+          "401": { "description": "Não autenticado", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+        }
+      }
+    },
+    "/quizzes/me/stats/overall": {
+      "get": {
+        "tags": ["Quizzes"],
+        "summary": "Relação total vs respondidas (geral, questões únicas)",
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": { "description": "OK", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/StatsOverall" } } } },
+          "401": { "description": "Não autenticado", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+        }
+      }
+  },
+  "/quizzes/me/answered-questions": {
+      "get": {
+        "tags": ["Quizzes"],
+        "summary": "Lista de IDs de questões já respondidas pelo aluno (questões únicas)",
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "answeredQuestionIds": { "type": "array", "items": { "type": "integer" } }
+                  }
+                }
+              }
+            }
+          },
+          "401": { "description": "Não autenticado", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+        }
+      }
+    }
+  }
+}
